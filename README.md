@@ -48,27 +48,21 @@ graph TB
 
 ## Build & Run
 
-This project uses the **Cargo Maven plugin** to run locally. Cargo is a container-agnostic deployment tool that can download and manage servlet containers (Tomcat, Jetty, JBoss, etc.) directly from Maven — no separate server installation needed.
+This project uses the **Cargo Maven plugin** to run locally. Cargo is a container-agnostic deployment tool that can download and manage servlet containers (Tomcat, Jetty, JBoss, etc.) directly from Maven — no separate server installation needed. It is configured to use **Tomcat 9.0.65**, the same version as the Docker image, so local and containerized behavior are consistent.
 
-It replaced the older `tomcat7-maven-plugin` because that plugin embeds a hardcoded Tomcat 7, which cannot parse class files produced by Java 9+ dependencies (H2 2.x ships `module-info.class` entries that Tomcat 7's BCEL library does not understand). Cargo is configured to use **Tomcat 9.0.65**, the same version as the Docker image, so local and containerized behavior are consistent.
-
-### Build
+### Build & Run
 
 ```bash
-mvn clean package
+mvn package cargo:run
 ```
 
-Compiles the source and packages it into `target/transaction-analyzer.war`.
+This compiles the source, packages it into `target/transaction-analyzer.war`, and deploys it to Tomcat in one step. On first run, Cargo downloads Tomcat 9.0.65 (~10 MB) and caches it locally. Subsequent runs use the cache.
 
-### Run
+To skip tests:
 
 ```bash
-mvn cargo:run
+mvn package cargo:run -DskipTests
 ```
-
-On first run, Cargo downloads Tomcat 9.0.65 (~10 MB) and caches it locally. Subsequent runs use the cache.
-
-> **Note:** Always run `mvn clean package` before `mvn cargo:run` to ensure the WAR is up to date.
 
 App available at: http://localhost:8080/transaction-analyzer
 
