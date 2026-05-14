@@ -1,0 +1,264 @@
+/* Pragati Bank — shared theme
+   Saffron #F28C28 | Navy #0B3D6E | Gold #C9A227 | Cream #FFF8EE */
+
+:root {
+    --saffron: #F28C28;
+    --navy: #0B3D6E;
+    --navy-dark: #082A4E;
+    --gold: #C9A227;
+    --cream: #FFF8EE;
+    --bg: #F4F6FA;
+    --card: #FFFFFF;
+    --border: #DDE3EC;
+    --text: #1F2A37;
+    --muted: #6B7280;
+    --danger: #C0392B;
+    --success: #1E7E34;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: "Segoe UI", "Noto Sans", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+    background: linear-gradient(90deg, var(--navy) 0%, var(--navy-dark) 100%);
+    color: #fff;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 6px rgba(0,0,0,.12);
+}
+.topbar .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.topbar .brand img { height: 40px; width: 40px; }
+.topbar .brand-name {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: .5px;
+}
+.topbar .brand-tag {
+    font-size: 12px;
+    opacity: .85;
+    font-style: italic;
+}
+.topbar .user-info { font-size: 14px; }
+.topbar .user-info .role-badge {
+    background: var(--saffron);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+    text-transform: uppercase;
+}
+.topbar a.logout {
+    color: #fff;
+    text-decoration: none;
+    margin-left: 16px;
+    border: 1px solid rgba(255,255,255,.4);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+    background: transparent;
+}
+.topbar a.logout:hover { background: rgba(255,255,255,.12); }
+
+/* ---------- Layout ---------- */
+.container {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px;
+}
+h1, h2, h3 { color: var(--navy); margin-top: 0; }
+h2 { border-bottom: 2px solid var(--saffron); padding-bottom: 6px; }
+
+.card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ---------- Forms ---------- */
+label {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    margin-top: 12px;
+}
+input, select, textarea {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 14px;
+    font-family: inherit;
+}
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--saffron);
+    box-shadow: 0 0 0 3px rgba(242,140,40,.18);
+}
+/* Password show/hide */
+.pwd-wrap { position: relative; }
+.pwd-wrap input { padding-right: 64px; }
+.pwd-toggle {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    color: var(--navy);
+    border: none;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.pwd-toggle:hover { background: rgba(11,61,110,.08); color: var(--navy-dark); }
+.pwd-toggle:focus { outline: 2px solid var(--saffron); outline-offset: 1px; }
+button, .btn {
+    background: var(--saffron);
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    margin-top: 12px;
+}
+button:hover, .btn:hover { background: #d97a1c; }
+button.secondary { background: var(--navy); }
+button.secondary:hover { background: var(--navy-dark); }
+button.danger { background: var(--danger); }
+button:disabled { background: #aaa; cursor: not-allowed; }
+
+/* ---------- Tables ---------- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 14px;
+}
+th, td {
+    padding: 9px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+th {
+    background: var(--cream);
+    color: var(--navy);
+    font-weight: 600;
+}
+tr:hover td { background: #FAFBFD; }
+.amt-credit { color: var(--success); font-weight: 600; }
+.amt-debit  { color: var(--danger);  font-weight: 600; }
+
+/* ---------- Messages ---------- */
+.alert {
+    padding: 10px 14px;
+    border-radius: 5px;
+    margin: 12px 0;
+    font-size: 14px;
+}
+.alert.error   { background: #FDEBE9; color: var(--danger); border-left: 4px solid var(--danger); }
+.alert.success { background: #E7F4EA; color: var(--success); border-left: 4px solid var(--success); }
+.alert.info    { background: #EAF2FB; color: var(--navy);    border-left: 4px solid var(--navy); }
+.hidden { display: none; }
+
+/* ---------- Login page ---------- */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(242,140,40,.18), transparent 50%),
+      radial-gradient(circle at 80% 70%, rgba(11,61,110,.20), transparent 55%),
+      var(--cream);
+    padding: 20px;
+}
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(11,61,110,.18);
+    padding: 32px 28px 24px;
+    border-top: 6px solid var(--saffron);
+}
+.login-brand {
+    text-align: center;
+    margin-bottom: 18px;
+}
+.login-brand img { width: 84px; height: 84px; }
+.login-brand h1 {
+    margin: 8px 0 4px;
+    color: var(--navy);
+    font-size: 26px;
+    letter-spacing: .5px;
+}
+.login-brand .tag {
+    color: var(--muted);
+    font-size: 13px;
+    font-style: italic;
+}
+.login-card .demo-hint {
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--cream);
+    border: 1px dashed var(--gold);
+    padding: 10px 12px;
+    border-radius: 5px;
+    line-height: 1.6;
+}
+.login-card .demo-hint code {
+    background: #fff;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+}
+
+/* ---------- KPI tiles (admin) ---------- */
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+@media (max-width: 720px) { .kpi-row { grid-template-columns: 1fr 1fr; } }
+.kpi {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+    color: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 2px 4px rgba(0,0,0,.10);
+}
+.kpi.saffron { background: linear-gradient(135deg, var(--saffron) 0%, #d97a1c 100%); }
+.kpi.gold    { background: linear-gradient(135deg, var(--gold) 0%, #a8861c 100%); }
+.kpi .label  { font-size: 12px; opacity: .9; text-transform: uppercase; letter-spacing: 1px; }
+.kpi .value  { font-size: 26px; font-weight: 700; margin-top: 4px; }
+
+/* ---------- Footer ---------- */
+.footer {
+    text-align: center;
+    padding: 18px;
+    color: var(--muted);
+    font-size: 12px;
+}

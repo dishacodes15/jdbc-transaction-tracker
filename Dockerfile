@@ -1,34 +1,36 @@
-# Stage 1: Build — Maven 3.8 with OpenJDK 11 (full JDK for compilation)
+# syntax=docker/dockerfile:1
+#
+# Pragati Bank — Banking Transaction Analyzer
+# Multi-stage Docker build: Maven build → Tomcat 9 runtime
+#
+
+# ---- Stage 1: Build with Maven + JDK 11 ----
 FROM maven:3.8.6-openjdk-11 AS build
 WORKDIR /app
 
-# Copy POM first to cache dependency downloads separately from source changes
+# Cache dependency resolution as a separate layer
 COPY pom.xml .
+RUN mvn -B dependency:go-offline
 
-# Download all dependencies offline to leverage Docker layer caching
-RUN mvn dependency:go-offline -B
-
-# Copy application source code
+# Copy sources and build the WAR (tests skipped for faster image builds — they
+# are exercised in CI; see DESIGN.md for the test strategy).
 COPY src ./src
+RUN mvn -B -DskipTests clean package
 
-# Build the WAR artifact (skip tests for faster image builds)
-RUN mvn clean package -DskipTests -B
-
-# Stage 2: Runtime — Tomcat 9.0 with OpenJDK 11 JRE slim (lightweight, no compiler)
+# ---- Stage 2: Tomcat 9 runtime on JRE 11 ----
 FROM tomcat:9.0.65-jre11-openjdk-slim
 
-# Remove default Tomcat webapps to keep the image clean
-RUN rm -rf /usr/local/tomcat/webapps/*
+# Clean default webapps so only our app is served
+RUN rm -rf /usr/local/tomcat/webapps/* && mkdir -p /app/data
 
-# Copy the built WAR from the build stage into Tomcat's webapps directory
-COPY --from=build /app/target/transaction-analyzer.war /usr/local/tomcat/webapps/transaction-analyzer.war
+# Copy the WAR. Maven produces ${finalName}.war = transaction-analyzer-1.0-SNAPSHOT.war.
+# Deploy it under the /transaction-analyzer context so URLs match the docs.
+COPY --from=build /app/target/transaction-analyzer-*.war /usr/local/tomcat/webapps/transaction-analyzer.war
 
-# Set user home to /app/data so H2 database files are written to a mountable volume
+# H2 writes its file DB to ~ (user home). Point that at a mountable volume so
+# data persists across container restarts.
 ENV JAVA_OPTS="-Duser.home=/app/data"
-RUN mkdir -p /app/data
+VOLUME ["/app/data"]
 
-# Expose Tomcat's default HTTP port
 EXPOSE 8080
-
-# Start Tomcat in the foreground
 CMD ["catalina.sh", "run"]

@@ -121,13 +121,24 @@ public class TransactionDAO {
     }
 
     public Long saveTransaction(Transaction transaction) {
+        try (Connection conn = DatabaseConnectionUtil.getConnection()) {
+            return saveInConnection(transaction, conn);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Error saving transaction", e);
+        }
+        return null;
+    }
+
+    /**
+     * Inserts a transaction using the supplied {@link Connection}. Used by
+     * {@code TransferService} so two inserts can share one DB transaction.
+     */
+    public Long saveInConnection(Transaction transaction, Connection conn) throws SQLException {
         String sql = "INSERT INTO transactions " +
                      "(account_number, transaction_type, amount, transaction_date, description, balance_after) " +
                      "VALUES (?, ?, ?, ?, ?, ?)";
 
-        try (Connection conn = DatabaseConnectionUtil.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-
+        try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             pstmt.setString(1, transaction.getAccountNumber());
             pstmt.setString(2, transaction.getTransactionType());
             pstmt.setBigDecimal(3, transaction.getAmount());
@@ -136,16 +147,14 @@ public class TransactionDAO {
             pstmt.setBigDecimal(6, transaction.getBalanceAfter());
 
             pstmt.executeUpdate();
-
             try (ResultSet rs = pstmt.getGeneratedKeys()) {
                 if (rs.next()) {
-                    return rs.getLong(1);
+                    long id = rs.getLong(1);
+                    transaction.setId(id);
+                    return id;
                 }
             }
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error saving transaction", e);
         }
-
         return null;
     }
 
@@ -216,6 +225,36 @@ public class TransactionDAO {
             LOGGER.log(Level.SEVERE, "Error calculating total " + type + " for account: " + accountNumber, e);
         }
 
+        return BigDecimal.ZERO;
+    }
+
+    public int countAll() {
+        try (Connection conn = DatabaseConnectionUtil.getConnection();
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM transactions")) {
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "countAll failed", e);
+        }
+        return 0;
+    }
+
+    /** Sum of (CREDIT − DEBIT) across all accounts. */
+    public BigDecimal sumSystemBalance() {
+        String sql = "SELECT " +
+                "COALESCE(SUM(CASE WHEN transaction_type = 'CREDIT' THEN amount ELSE 0 END), 0) - " +
+                "COALESCE(SUM(CASE WHEN transaction_type = 'DEBIT'  THEN amount ELSE 0 END), 0) " +
+                "FROM transactions";
+        try (Connection conn = DatabaseConnectionUtil.getConnection();
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+            if (rs.next()) {
+                BigDecimal v = rs.getBigDecimal(1);
+                return v == null ? BigDecimal.ZERO : v;
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "sumSystemBalance failed", e);
+        }
         return BigDecimal.ZERO;
     }
 

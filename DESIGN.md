@@ -1,342 +1,370 @@
-# Banking Transaction Analyzer — Design Document
+# Pragati Bank — Design Document
 
-## Overview
+A minimal but multi-user retail banking demo built on **Java Servlets + JSP +
+JDBC + H2**. The app is structured as a classic three-tier MVC architecture
+with explicit authentication, authorisation and a service layer that enforces
+banking invariants (no negative balances, no transfers from frozen accounts,
+atomic transfers, etc.).
 
-The Banking Transaction Analyzer is a servlet-based web application that provides a REST API and browser UI for managing and analyzing banking transactions. It follows a classic **three-tier architecture**: presentation (JSP/HTML), business logic (Servlet), and data access (DAO/JDBC), all packaged as a single WAR deployable on Apache Tomcat.
+> Educational project. Money, accounts and customers are fictitious.
 
 ---
 
-## Architecture Diagram
+## 1. High-level architecture
 
 ```mermaid
-graph TD
+graph TB
     subgraph Client
-        Browser[Browser<br/>app.jsp UI]
-        CLI[curl / REST client]
+        Browser["Browser<br/>login.jsp · dashboard.jsp · admin.jsp"]
+        Curl[curl / REST client]
     end
 
-    subgraph Tomcat ["Tomcat 9 :8080"]
-        direction TB
-        Listener[ApplicationInitializationListener<br/>DB bootstrap on startup]
-        Servlet[TransactionServlet<br/>REST API controller]
-        DAO[TransactionDAO<br/>JDBC data access]
-        Util[DatabaseConnectionUtil<br/>Connection factory]
+    subgraph Tomcat ["Apache Tomcat 9 — :8080"]
+        Filter[AuthFilter<br/>session + role guard]
+        subgraph Servlets ["Servlets (REST controllers)"]
+            Auth[LoginServlet<br/>LogoutServlet<br/>DashboardServlet]
+            Acct[AccountServlet]
+            Tx[TransactionServlet]
+            Xfer[TransferServlet]
+            Users[UserServlet]
+            Admin[AdminStatsServlet<br/>AdminResetServlet]
+        end
+        subgraph Services ["Service layer"]
+            AuthSvc[AuthService]
+            AcctSvc[AccountService]
+            XferSvc[TransferService]
+        end
+        subgraph DAOs ["DAOs"]
+            UserDAO
+            AccountDAO
+            TransactionDAO
+        end
+        Init[ApplicationInitializationListener<br/>schema bootstrap + seed]
     end
 
-    subgraph Storage
-        H2[(H2 File DB<br/>~/banking_db)]
-    end
+    H2[(H2 file DB<br/>~/banking_db)]
 
-    Browser -->|HTTP GET/POST| Servlet
-    CLI -->|HTTP| Servlet
-    Listener -->|initializeDatabase| Util
-    Servlet -->|CRUD calls| DAO
-    DAO -->|getConnection| Util
-    Util -->|JDBC| H2
+    Browser -->|HTTP + JSESSIONID| Filter
+    Curl -->|HTTP| Filter
+    Filter --> Auth & Acct & Tx & Xfer & Users & Admin
+    Auth --> AuthSvc --> UserDAO
+    Acct --> AcctSvc --> AccountDAO
+    Acct --> AcctSvc --> TransactionDAO
+    Xfer --> XferSvc --> AccountDAO & TransactionDAO
+    Tx --> TransactionDAO
+    Users --> UserDAO & AccountDAO
+    Admin --> UserDAO & AccountDAO & TransactionDAO
+    Init --> UserDAO & AccountDAO & TransactionDAO
+    UserDAO & AccountDAO & TransactionDAO --> H2
 ```
+
+### Layers
+
+| Layer | Responsibilities |
+|-------|------------------|
+| **Presentation** (JSP + vanilla JS) | Render UI shell, call the REST API via `fetch`, format ₹ amounts, manage login/redirect flows. |
+| **Web / control** (Servlets + AuthFilter) | HTTP routing, JSON marshalling (Gson), session creation, role enforcement. No business logic. |
+| **Service** | Banking invariants: balance never goes negative, account must be ACTIVE, transfers are atomic, passwords are hashed. |
+| **Data access** (DAOs) | Pure JDBC with `PreparedStatement`. One DAO per table; no SQL leaks outside this layer. |
+| **Persistence** | H2 in file mode at `~/banking_db` (`AUTO_SERVER=TRUE`). |
 
 ---
 
-## Request Flow
+## 2. Authentication & authorisation
+
+### Sequence — login
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant S as TransactionServlet
-    participant D as TransactionDAO
-    participant DB as H2 Database
-
-    C->>S: HTTP Request (GET/POST/PUT/DELETE)
-    S->>S: Parse path & JSON body (Gson)
-    S->>D: Call appropriate DAO method
-    D->>DB: Execute SQL (PreparedStatement)
-    DB-->>D: ResultSet / update count
-    D-->>S: Transaction object(s)
-    S-->>C: JSON response
+    participant U as Browser
+    participant L as LoginServlet
+    participant A as AuthService
+    participant D as UserDAO
+    U->>L: POST /api/auth/login {username,password}
+    L->>A: authenticate(username, password)
+    A->>D: findByUsername(username)
+    D-->>A: User (with bcrypt hash)
+    A->>A: BCrypt.checkpw(password, hash)
+    A-->>L: User (or AuthenticationException)
+    L->>L: req.getSession(true).setAttribute(userId, role, ...)
+    L-->>U: 200 + user JSON · Set-Cookie: JSESSIONID
 ```
+
+### `AuthFilter` (URL: `/api/*`, `/dashboard.jsp`, `/admin.jsp`, `/statement.jsp`, `/app.jsp`)
+
+```mermaid
+flowchart LR
+    Req([HTTP request]) --> Public{Public path?<br/>/api/auth/login<br/>/api/auth/health}
+    Public -- yes --> Chain[doFilter → servlet]
+    Public -- no --> HasSession{HttpSession + userId?}
+    HasSession -- no --> R401[/401 or redirect to login.jsp/]
+    HasSession -- yes --> AdminOnly{Path starts with<br/>/api/admin or /api/users?}
+    AdminOnly -- no --> Chain
+    AdminOnly -- yes --> IsAdmin{role == ADMIN?}
+    IsAdmin -- no --> R403[/403 Admin role required/]
+    IsAdmin -- yes --> Chain
+```
+
+* **Sessions** are standard `HttpSession` cookies (`JSESSIONID`). Stored
+  attributes: `userId` (Long), `username`, `role`, `fullName`.
+* **Passwords** are hashed with BCrypt (`org.mindrot:jbcrypt`) at signup time;
+  only the hash is persisted.
+* **Admin-only prefixes:** `/api/users`, `/api/admin`. Everything else under
+  `/api/*` only requires an authenticated session; ownership checks happen in
+  the servlets (e.g. `AccountServlet` rejects `deposit` to an account the
+  caller doesn't own with `403`).
 
 ---
 
-## Component Details
+## 3. Data model
 
-### 1. `Transaction` (Model)
+```mermaid
+erDiagram
+    users ||--o{ accounts : owns
+    accounts ||--o{ transactions : has
 
-| Aspect | Detail |
-|--------|--------|
-| Package | `com.banking.analyzer.model` |
-| Role | Domain object representing a single CREDIT or DEBIT transaction |
-| Fields | `id`, `accountNumber`, `transactionType`, `amount`, `transactionDate`, `description`, `balanceAfter`, `createdAt` |
-| Notes | Uses `BigDecimal` for monetary precision; `LocalDateTime` for timestamps. Serialised to/from JSON by Gson. |
-
----
-
-### 2. `TransactionDAO` (Data Access)
-
-| Aspect | Detail |
-|--------|--------|
-| Package | `com.banking.analyzer.dao` |
-| Role | Encapsulates all SQL operations against the `transactions` table |
-| Key methods | `getAllTransactions`, `getTransactionById`, `getTransactionsByAccount`, `getTransactionsByDateRange`, `saveTransaction`, `updateTransaction`, `deleteTransaction`, `getTotalCredits`, `getTotalDebits` |
-| Security | All queries use `PreparedStatement` to prevent SQL injection |
-| Error handling | Catches `SQLException`, logs via `java.util.logging`, returns null/empty/false on failure |
-
----
-
-### 3. `TransactionServlet` (REST Controller)
-
-| Aspect | Detail |
-|--------|--------|
-| Package | `com.banking.analyzer.servlet` |
-| URL pattern | `/api/transactions`, `/api/transactions/*` |
-| Role | HTTP request routing, JSON serialisation/deserialisation, error responses |
-| Dependencies | `TransactionDAO`, `Gson` |
-
-#### Supported API Endpoints
-
-| Method | Path | Description | Status |
-|--------|------|-------------|--------|
-| GET | `/api/transactions` | List all transactions | ✅ Verified |
-| GET | `/api/transactions/{id}` | Get transaction by ID | ✅ Verified |
-| POST | `/api/transactions` | Create a new transaction | ✅ Verified |
-| PUT | `/api/transactions/{id}` | Update an existing transaction | ✅ Verified |
-| DELETE | `/api/transactions/{id}` | Delete a transaction | ✅ Verified |
-| GET | `/api/transactions/account/{acct}` | Transactions for an account | ✅ Verified |
-| GET | `/api/transactions/account/{acct}/summary` | Account summary (count, credits, debits, balance) | ✅ Verified |
-| GET | `/api/transactions/account/{acct}/balance` | Current balance | ✅ Verified |
-| GET | `/api/transactions/account/{acct}/credits` | Total credits | ✅ Verified |
-| GET | `/api/transactions/account/{acct}/debits` | Total debits | ✅ Verified |
-
-#### Request body (POST/PUT)
-
-```json
-{
-  "accountNumber": "ACC001",
-  "transactionType": "CREDIT",
-  "amount": 15000.00,
-  "transactionDate": "2026-04-29 10:00:00",
-  "description": "Salary",
-  "balanceAfter": 15000.00
-}
+    users {
+        BIGINT id PK
+        VARCHAR username UK
+        VARCHAR password_hash
+        VARCHAR full_name
+        VARCHAR role         "USER | ADMIN"
+        VARCHAR status       "ACTIVE | LOCKED"
+        TIMESTAMP created_at
+    }
+    accounts {
+        VARCHAR account_number PK
+        BIGINT user_id FK
+        VARCHAR account_type   "SAVINGS | CHECKING"
+        DECIMAL balance
+        VARCHAR status         "ACTIVE | FROZEN"
+        TIMESTAMP created_at
+    }
+    transactions {
+        BIGINT id PK
+        VARCHAR account_number FK
+        VARCHAR transaction_type "CREDIT | DEBIT"
+        DECIMAL amount
+        TIMESTAMP transaction_date
+        VARCHAR description
+        DECIMAL balance_after
+        TIMESTAMP created_at
+    }
 ```
 
-`transactionType`: `CREDIT` or `DEBIT`
+The schema is created on application startup by
+`DatabaseConnectionUtil.initializeDatabase()` using `CREATE TABLE IF NOT EXISTS`,
+so the DB is safe to drop or wipe at any time. Demo data is loaded by
+`DataSeeder.seedIfEmpty()` only when the `users` table is empty.
 
-#### JSON date format
+### Storage
 
-All dates use `yyyy-MM-dd HH:mm:ss`. Custom Gson serializers/deserializers handle `LocalDateTime` conversion.
+H2 in file mode at `~/banking_db` (configurable via the `user.home` JVM
+property — the Docker image sets it to `/app/data` so the DB lands on the
+mounted volume). Created automatically on first startup.
 
-#### Response examples (verified against Docker container)
-
-**POST /api/transactions** → `201 Created`
-```json
-{
-  "id": 7,
-  "accountNumber": "ACC001",
-  "transactionType": "CREDIT",
-  "amount": 15000.0,
-  "transactionDate": "2026-04-29 10:00:00",
-  "description": "Salary",
-  "balanceAfter": 15000.0
-}
-```
-
-**GET /api/transactions/{id}** → `200 OK`
-```json
-{
-  "id": 7,
-  "accountNumber": "ACC001",
-  "transactionType": "CREDIT",
-  "amount": 15000.0,
-  "transactionDate": "2026-04-29 10:00:00",
-  "description": "Salary",
-  "balanceAfter": 15000.0,
-  "createdAt": "2026-04-29 16:43:36"
-}
-```
-
-**GET /api/transactions/account/{acct}/summary** → `200 OK`
-```json
-{
-  "accountNumber": "ACC001",
-  "transactionCount": 8,
-  "totalCredits": 41000.0,
-  "totalDebits": 14700.0,
-  "balance": 26300.0
-}
-```
-
-**GET /api/transactions/account/{acct}/balance** → `200 OK`
-```json
-{ "balance": 26300.0 }
-```
-
-**GET /api/transactions/account/{acct}/credits** → `200 OK`
-```json
-{ "totalCredits": 41000.0 }
-```
-
-**GET /api/transactions/account/{acct}/debits** → `200 OK`
-```json
-{ "totalDebits": 14700.0 }
-```
-
-**DELETE /api/transactions/{id}** → `200 OK`
-```json
-{ "message": "Transaction deleted successfully" }
-```
-
-**Error — GET /api/transactions/999** → `404`
-```json
-{ "error": "Transaction not found" }
-```
-
-#### Example curl commands
-
-```bash
-# Create transaction
-curl -X POST http://localhost:8080/transaction-analyzer/api/transactions \
-  -H "Content-Type: application/json" \
-  -d '{"accountNumber":"ACC001","transactionType":"CREDIT","amount":15000.00,"transactionDate":"2026-04-29 10:00:00","description":"Salary","balanceAfter":15000.00}'
-
-# Get all
-curl http://localhost:8080/transaction-analyzer/api/transactions
-
-# Get by ID
-curl http://localhost:8080/transaction-analyzer/api/transactions/1
-
-# Update
-curl -X PUT http://localhost:8080/transaction-analyzer/api/transactions/1 \
-  -H "Content-Type: application/json" \
-  -d '{"accountNumber":"ACC001","transactionType":"CREDIT","amount":20000.00,"transactionDate":"2026-04-29 10:00:00","description":"Updated Salary","balanceAfter":20000.00}'
-
-# Delete
-curl -X DELETE http://localhost:8080/transaction-analyzer/api/transactions/1
-
-# Account summary
-curl http://localhost:8080/transaction-analyzer/api/transactions/account/ACC001/summary
-
-# Balance / Credits / Debits
-curl http://localhost:8080/transaction-analyzer/api/transactions/account/ACC001/balance
-curl http://localhost:8080/transaction-analyzer/api/transactions/account/ACC001/credits
-curl http://localhost:8080/transaction-analyzer/api/transactions/account/ACC001/debits
-```
-
----
-
-### 4. `ApplicationInitializationListener` (Lifecycle)
-
-| Aspect | Detail |
-|--------|--------|
-| Package | `com.banking.analyzer.servlet` |
-| Role | `ServletContextListener` that runs on deployment to ensure the DB schema exists |
-| Behaviour | Calls `DatabaseConnectionUtil.initializeDatabase()` which creates the `transactions` table if absent |
-
----
-
-### 5. `DatabaseConnectionUtil` (Infrastructure)
-
-| Aspect | Detail |
-|--------|--------|
-| Package | `com.banking.analyzer.util` |
-| Role | JDBC connection factory and one-time schema creation |
-| Database | H2 file-mode at `~/banking_db` with `AUTO_SERVER=TRUE` |
-| Key methods | `getConnection()` — returns a new JDBC connection; `initializeDatabase()` — DDL execution |
-| Extensibility | Constants can be swapped to point at MySQL or another RDBMS |
-
----
-
-### 6. `app.jsp` (UI — Frontend)
-
-| Aspect | Detail |
-|--------|--------|
-| Location | `src/main/webapp/app.jsp` |
-| Role | Single-page browser interface for viewing and adding transactions |
-| Technology | Pure HTML + inline CSS + vanilla JavaScript (no frameworks) |
-
-#### UI Features
-
-| Feature | Description |
-|---------|-------------|
-| Account statistics | Displays total credits, total debits, and balance for the selected account |
-| Add transaction form | Fields for account number, type (credit/debit), amount, date, time, description |
-| Transaction table | Sortable list showing all transactions with type badges and color-coded amounts |
-| Filter: large transactions | Button to show only transactions greater than ₹10,000 |
-| Sort by amount | Cycles through ascending / descending / unsorted |
-| Reset | Restores full unfiltered view |
-| Currency | All monetary values displayed in Indian Rupee (₹) |
-
-#### Client-Server Interaction
-
-The UI communicates with the backend exclusively via `fetch()` calls to the REST API endpoints. No server-side rendering of transaction data occurs — the JSP serves as a static shell that bootstraps the JavaScript application.
-
----
-
-## Database Schema
+### DDL
 
 ```sql
+CREATE TABLE users (
+    id            INT PRIMARY KEY AUTO_INCREMENT,
+    username      VARCHAR(50)  NOT NULL UNIQUE,
+    password_hash VARCHAR(100) NOT NULL,
+    full_name     VARCHAR(100) NOT NULL,
+    role          VARCHAR(20)  NOT NULL,    -- USER | ADMIN
+    status        VARCHAR(20)  NOT NULL,    -- ACTIVE | LOCKED
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE accounts (
+    account_number VARCHAR(50)    PRIMARY KEY,
+    user_id        INT            NOT NULL,
+    account_type   VARCHAR(20)    NOT NULL, -- SAVINGS | CHECKING
+    balance        DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    status         VARCHAR(20)    NOT NULL, -- ACTIVE | FROZEN
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE TABLE transactions (
     id               INT PRIMARY KEY AUTO_INCREMENT,
     account_number   VARCHAR(50)    NOT NULL,
-    transaction_type VARCHAR(20)    NOT NULL,
-    amount           DECIMAL(15,2)  NOT NULL,
+    transaction_type VARCHAR(20)    NOT NULL, -- CREDIT | DEBIT
+    amount           DECIMAL(15, 2) NOT NULL,
     transaction_date TIMESTAMP      NOT NULL,
     description      VARCHAR(500),
-    balance_after    DECIMAL(15,2)  NOT NULL,
-    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    balance_after    DECIMAL(15, 2) NOT NULL,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (account_number) REFERENCES accounts(account_number)
 );
 ```
 
 ---
 
-## Technology Stack
+## 4. Components
 
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Language | Java 11 | Application code |
-| Web framework | Java Servlets 4.0 | HTTP handling |
-| Data access | JDBC | Database operations |
-| Database | H2 2.1.214 | Embedded file-based storage |
-| JSON | Gson 2.10.1 | Serialisation / deserialisation |
-| Build | Maven 3.6+ | Dependency management & packaging |
-| Server | Tomcat 7 (embedded via Maven plugin) | Application server |
-| Frontend | HTML / CSS / JavaScript | Browser UI |
+### Models — `com.banking.analyzer.model`
+
+| Class | Notes |
+|-------|-------|
+| `User` | id, username, passwordHash, fullName, role, status, createdAt. Constants `ROLE_USER`, `ROLE_ADMIN`, `STATUS_ACTIVE`, `STATUS_LOCKED`. |
+| `Account` | accountNumber (PK), userId, accountType, status, createdAt. Constants for SAVINGS/CHECKING and ACTIVE/FROZEN. |
+| `Transaction` | id, accountNumber, type, amount (`BigDecimal`), transactionDate, description, balanceAfter. |
+
+All monetary fields use `BigDecimal`; timestamps use `LocalDateTime` with a
+custom Gson adapter (`yyyy-MM-dd HH:mm:ss`).
+
+### DAOs — `com.banking.analyzer.dao`
+
+Pure JDBC, every query uses `PreparedStatement`, every method handles
+`SQLException` defensively (logs and returns null/empty/false).
+
+| DAO | Key methods |
+|-----|-------------|
+| `UserDAO` | `save`, `findByUsername`, `findById`, `listAll`, `countAll`, `updateStatus` |
+| `AccountDAO` | `save`, `findByAccountNumber`, `findByUserId`, `listAll`, `countAll`, `isOwnedBy`, `updateBalance` (via DAO), `updateStatus` |
+| `TransactionDAO` | `saveTransaction`, `findById`, `getByAccount`, `countAll`, `sumSystemBalance` |
+
+### Service layer — `com.banking.analyzer.service`
+
+| Service | Invariants enforced |
+|---------|---------------------|
+| `AuthService` | password verified with BCrypt; rejects LOCKED users. |
+| `AccountService` | deposit/withdraw must target an ACTIVE account; amount > 0; withdraw never reduces balance below 0; balance is computed by summing `transactions.balance_after` of the latest row, or by aggregating credits − debits. Each operation writes a `Transaction` row. |
+| `TransferService` | from-account and to-account must both be ACTIVE; both writes (debit on source, credit on destination) happen inside one JDBC transaction so partial transfers are impossible. |
+
+Exceptions `BusinessException` and `AuthenticationException` map to HTTP
+`400`/`401` at the servlet boundary.
+
+### Servlets — `com.banking.analyzer.servlet`
+
+| Servlet | URL pattern | Methods | Purpose |
+|---------|-------------|---------|---------|
+| `LoginServlet` | `/api/auth/login` | POST | Verify credentials, create session. |
+| `LogoutServlet` | `/api/auth/logout` | POST | Invalidate session. |
+| `DashboardServlet` | `/api/auth/me` | GET | Returns `{user, accounts:[…]}` for the current session. |
+| `AccountServlet` | `/api/accounts`, `/api/accounts/*` | GET, POST, PUT | List own accounts (or all, for ADMIN); deposit; withdraw; update status (ADMIN). |
+| `TransferServlet` | `/api/transfers` | POST | Body `{fromAccount, toAccount, amount, description}`. |
+| `TransactionServlet` | `/api/transactions/*` | GET | Read-only: per-account history, ownership enforced. |
+| `UserServlet` | `/api/users`, `/api/users/*` | GET, POST, PUT | List, create, lock/unlock users (ADMIN). |
+| `AdminStatsServlet` | `/api/admin/stats` | GET | KPI tiles: user / account / transaction counts and system balance. |
+| `AdminResetServlet` | `/api/admin/reset` | POST | Wipes all data and re-seeds. Invalidates the caller's session. |
+| `ApplicationInitializationListener` | n/a | n/a | `ServletContextListener` — runs `initializeDatabase()` then `seedIfEmpty()` on startup. |
+
+### Filter — `com.banking.analyzer.filter`
+
+`AuthFilter` (`@WebFilter` on `/api/*`, `/dashboard.jsp`, `/admin.jsp`,
+`/statement.jsp`, `/app.jsp`). Behaviour described in §2.
+
+### Utilities — `com.banking.analyzer.util`
+
+| Util | Role |
+|------|------|
+| `DatabaseConnectionUtil` | JDBC connection factory; one-time schema creation; `resetAllData()` (used by AdminResetServlet) and `dropAllForTest()` (used by tests). |
+| `DataSeeder` | Inserts `admin/alice/bob` plus 3 demo accounts and 4 starter transactions when the DB is empty. |
+| `JsonUtil` | Gson wrapper. Excludes `passwordHash` from any user JSON. Helpers `writeJson`, `writeError`, `fromJson`. |
+| `PasswordUtil` | `hash(plain)` and `verify(plain, hash)` via BCrypt. |
+| `SessionUtil` | Reads `userId`, `username`, `role` from `HttpSession`; `isAdmin(req)` shortcut. |
 
 ---
 
-## Validation
+## 5. REST API surface
 
-### UI Validations (`app.jsp` — `addTransaction()`)
+> All endpoints expect/return JSON. Authenticated endpoints require a
+> `JSESSIONID` cookie obtained from `POST /api/auth/login`.
 
-| Check | Condition | User Feedback |
-|-------|-----------|---------------|
-| Amount is positive | `amount <= 0` or empty | Status message: "Please enter a valid amount." |
-| Account number present | empty string after trim | Status message: "Please enter an account number." |
-| HTML `min` attribute | `<input min="0">` on amount field | Browser prevents negative input via spinner |
-| HTML `type="number"` | amount field | Browser rejects non-numeric input |
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/auth/health` | public | Liveness probe. |
+| POST | `/api/auth/login` | public | `{username, password}` → user JSON + session cookie. |
+| POST | `/api/auth/logout` | session | Invalidates session. |
+| GET | `/api/auth/me` | session | Returns `{user, accounts}` for the current user. |
+| GET | `/api/accounts` | session | Own accounts (USER) or all (ADMIN). |
+| POST | `/api/accounts/{acct}/deposit` | session, owner | `{amount, description}` → 201 + new `Transaction`. |
+| POST | `/api/accounts/{acct}/withdraw` | session, owner | `{amount, description}` → 201 + new `Transaction`. |
+| PUT | `/api/accounts/{acct}/status` | ADMIN | `{status: ACTIVE\|FROZEN}` → 200. |
+| POST | `/api/transfers` | session, owner of `fromAccount` | `{fromAccount, toAccount, amount, description}` → 201 + two `Transaction` rows. |
+| GET | `/api/transactions/account/{acct}` | session, owner or ADMIN | Transactions for one account. |
+| GET | `/api/users` | ADMIN | List all users (no password hashes). |
+| POST | `/api/users` | ADMIN | `{username, password, fullName, role, accountNumber?, accountType?}` → 201. |
+| PUT | `/api/users/{id}/status` | ADMIN | `{status: ACTIVE\|LOCKED}` → 200. |
+| GET | `/api/admin/stats` | ADMIN | `{totalUsers, totalAccounts, totalTransactions, systemBalance}`. |
+| POST | `/api/admin/reset` | ADMIN | Wipe + re-seed. Invalidates caller session. |
 
-### REST API Validations (`TransactionServlet`)
+Error envelope (any non-2xx response):
 
-| Check | Location | Behaviour |
-|-------|----------|-----------|
-| Path ID is numeric | `doGet`, `doPut`, `doDelete` | Regex `"/\\d+"` — returns 400 "Invalid transaction ID" if non-numeric |
-| Transaction exists (GET) | `doGet` by ID | Returns 404 "Transaction not found" |
-| Transaction exists (PUT) | `doPut` | Returns 404 "Transaction not found" if update affects 0 rows |
-| Transaction exists (DELETE) | `doDelete` | Returns 404 "Transaction not found" if delete affects 0 rows |
-| Account path format | `handleAccountRequest` | Returns 400 "Invalid account path" if path has < 3 segments |
-| Valid action | `handleAccountRequest` switch | Returns 400 "Invalid action: {action}" for unknown sub-paths |
-| JSON parseable | Gson `fromJson()` | Returns 500 with parse error message if body is malformed |
-| Date format | Gson `LocalDateTime` deserializer | Returns 500 if date doesn't match `yyyy-MM-dd HH:mm:ss` |
+```json
+{ "error": "Human-readable message" }
+```
 
-### NOT Validated by the REST API
-
-| Missing Validation | Risk |
-|-------------------|------|
-| Negative or zero amount | API accepts `amount: -500` — no rejection |
-| Empty/null `accountNumber` | SQL insert may fail with DB constraint or store null |
-| Invalid `transactionType` | Values other than `CREDIT`/`DEBIT` accepted silently |
-| Missing required fields | Null fields pass through to DAO, may cause `NullPointerException` or DB error |
-| Amount precision | Arbitrarily large values accepted (limited only by `DECIMAL(15,2)` at DB level) |
-| `balanceAfter` correctness | API trusts the client-provided value — no server-side recalculation |
+Status codes used: `200`, `201`, `400` (validation / BusinessException),
+`401` (no session / bad password), `403` (wrong role / not owner), `404`,
+`409` (duplicate username), `500`.
 
 ---
 
+## 6. Frontend (JSP + vanilla JS)
+
+Three pages share [src/main/webapp/assets/pragati.css](src/main/webapp/assets/pragati.css):
+
+| Page | Audience | Sections |
+|------|----------|----------|
+| [login.jsp](src/main/webapp/login.jsp) | public — `<%@ page session="false" %>` | Branded card, username/password with show/hide toggle, demo-credentials hint. |
+| [dashboard.jsp](src/main/webapp/dashboard.jsp) | USER | My Accounts table · Deposit/Withdraw card · Transfer card · Recent Transactions (per-account selector). |
+| [admin.jsp](src/main/webapp/admin.jsp) | ADMIN | KPI tiles · Create User · Account Status · All Users · All Accounts · **Maintenance** (reset to seed). |
+
+All client-side calls funnel through a single `api(method, path, body)` helper
+that auto-redirects to `login.jsp` on `401`. There are no client-side
+frameworks — only `fetch`, DOM APIs and Indian-locale number formatting.
+
+Brand palette: saffron `#F28C28`, navy `#0B3D6E`, gold `#C9A227`, cream `#FFF8EE`.
+
+---
+
+## 7. Tests
+
+```mermaid
+graph LR
+    Unit[Unit tests<br/>24 cases] -->|in-memory H2| DAO_Svc[DAOs + Services]
+    Smoke[REST smoke tests<br/>11 cases · @EnabledIfSystemProperty] -->|HttpClient + cookies| Live[Live Tomcat]
+```
+
+| Suite | File | Notes |
+|-------|------|-------|
+| DAO | `UserAccountDAOTest` | CRUD against in-memory H2 (`jdbc:h2:mem:test;MODE=LEGACY`). 7 cases. |
+| Services | `AccountServiceTest`, `AuthServiceTest`, `TransferServiceTest` | Banking invariants, BCrypt, transactional transfers. 17 cases. |
+| REST | `RestApiSmokeTest` | Opt-in. Enabled by `-Drest.url=http://localhost:8080/transaction-analyzer`. Uses Java 11 `HttpClient` + `CookieManager`. 11 cases. |
+
+Run everything:
+
+```bash
+mvn test
+mvn cargo:run &                                                  # in another shell
+mvn -Dtest=RestApiSmokeTest -Drest.url=http://localhost:8080/transaction-analyzer test
+```
+
+---
+
+## 8. Operational notes
+
+* **DB file** — `~/banking_db.mv.db`. Delete it to wipe state; on restart it
+  will be re-created and re-seeded.
+* **Reset from UI** — the admin Maintenance card calls `POST /api/admin/reset`
+  which wipes rows (preserving the schema) and re-seeds. Identity sequences
+  for `users` and `transactions` are restarted at 1. The caller's session is
+  invalidated so they must log in again with the seed `admin/admin123`.
+* **Stateless API** — every state-changing request is one HTTP call and one
+  service method. Banking transfers are atomic at the JDBC level
+  (`autoCommit=false` → both rows inserted or none).
+* **No CSRF tokens** — out of scope for the demo; if you exposed this on the
+  open internet you would need them on all `POST`/`PUT` endpoints.
+
+---
+
+## 9. Future enhancements (not implemented)
+
+* Statement PDF export (per account, date range).
+* Server-side pagination on `/api/transactions/...`.
+* CSRF tokens and HSTS.
+* Email + password-reset flows.
+* Real RDBMS (MySQL/Postgres) via swapping `DatabaseConnectionUtil`.

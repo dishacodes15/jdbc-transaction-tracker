@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pragati Bank — Logo with slogan
+  Self-contained SVG. No external fonts or images.
+  Usage: <img src="assets/pragati-logo.svg" alt="Pragati Bank" height="64">
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 520 160"
+     role="img"
+     aria-label="Pragati Bank — Aapki pragati, hamari zimmedari.">
+
+  <title>Pragati Bank</title>
+  <desc>Pragati Bank logo: a rising sun with an upward growth arrow, wordmark, and bilingual tagline.</desc>
+
+  <defs>
+    <!-- Sun gradient: saffron to gold -->
+    <radialGradient id="sunGrad" cx="50%" cy="55%" r="60%">
+      <stop offset="0%"  stop-color="#FFC371"/>
+      <stop offset="60%" stop-color="#F28C28"/>
+      <stop offset="100%" stop-color="#D97316"/>
+    </radialGradient>
+    <linearGradient id="arrowGrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%"  stop-color="#0B3D6E"/>
+      <stop offset="100%" stop-color="#1E6FB8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ── Logo mark (rising sun + growth arrow) ─────────────── -->
+  <g transform="translate(20,18)">
+    <!-- horizon line -->
+    <line x1="0" y1="98" x2="120" y2="98"
+          stroke="#0B3D6E" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- sun rays -->
+    <g stroke="#F28C28" stroke-width="3" stroke-linecap="round">
+      <line x1="60" y1="10"  x2="60" y2="22"/>
+      <line x1="18" y1="28"  x2="27" y2="37"/>
+      <line x1="102" y1="28" x2="93" y2="37"/>
+      <line x1="4"  y1="68"  x2="16" y2="68"/>
+      <line x1="116" y1="68" x2="104" y2="68"/>
+    </g>
+
+    <!-- sun disc -->
+    <circle cx="60" cy="68" r="28" fill="url(#sunGrad)"
+            stroke="#B8540E" stroke-width="1.5"/>
+
+    <!-- upward growth arrow / bar chart in front of sun -->
+    <g fill="url(#arrowGrad)">
+      <rect x="36" y="78" width="10" height="20" rx="2"/>
+      <rect x="52" y="68" width="10" height="30" rx="2"/>
+      <rect x="68" y="56" width="10" height="42" rx="2"/>
+    </g>
+    <!-- arrowhead -->
+    <path d="M82 60 L96 46 L96 56 L102 56 L102 64 L96 64 L96 74 Z"
+          fill="#0B3D6E"/>
+  </g>
+
+  <!-- ── Wordmark ──────────────────────────────────────────── -->
+  <g font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+     text-anchor="start">
+
+    <!-- "Pragati" in navy -->
+    <text x="165" y="70"
+          font-size="46"
+          font-weight="700"
+          letter-spacing="1"
+          fill="#0B3D6E">Pragati</text>
+
+    <!-- "Bank" in saffron -->
+    <text x="340" y="70"
+          font-size="46"
+          font-weight="700"
+          letter-spacing="1"
+          fill="#F28C28">Bank</text>
+
+    <!-- Underline accent (gold) -->
+    <rect x="165" y="80" width="285" height="3" rx="1.5" fill="#C9A227"/>
+
+    <!-- Hindi tagline -->
+    <text x="165" y="108"
+          font-size="16"
+          font-weight="600"
+          fill="#0B3D6E">आपकी प्रगति, हमारी ज़िम्मेदारी।</text>
+
+    <!-- English tagline -->
+    <text x="165" y="130"
+          font-size="13"
+          font-style="italic"
+          fill="#555">Your progress, our responsibility.</text>
+  </g>
+</svg>
