@@ -45,6 +45,7 @@ Render connects to your GitHub repo, detects the Dockerfile, and builds + deploy
    |---------|-------|
    | Dockerfile Path | `./Dockerfile` |
    | Docker Command | _(leave empty — uses CMD from Dockerfile)_ |
+   | Health Check Path | `/transaction-analyzer/api/auth/health` |
 
 6. Add a **Disk** for persistent H2 database:
 
@@ -127,6 +128,7 @@ docker push ghcr.io/YOUR_GITHUB_USERNAME/banking-analyzer:latest
    | Name | `banking-analyzer` |
    | Region | Choose nearest |
    | Instance Type | Free or Starter |
+   | Health Check Path | `/transaction-analyzer/api/auth/health` |
 
 7. Add a **Disk**:
 
@@ -165,16 +167,20 @@ The H2 database writes to `~/banking_db` which resolves to `/app/data/banking_db
 
 ## Verify Deployment
 
-After deployment completes, test the API:
+After deployment completes, test the health check first:
 
 ```bash
-# Health check — should return JSON array
-curl https://YOUR-APP.onrender.com/transaction-analyzer/api/transactions
+# Health check — should return {"status":"UP"}
+curl https://YOUR-APP.onrender.com/transaction-analyzer/api/auth/health
+```
 
-# Create a transaction
-curl -X POST https://YOUR-APP.onrender.com/transaction-analyzer/api/transactions \
+Then test the API:
+
+```bash
+# Login
+curl -X POST https://YOUR-APP.onrender.com/transaction-analyzer/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"accountNumber":"ACC001","transactionType":"CREDIT","amount":5000.00,"transactionDate":"2026-04-29 10:00:00","description":"Test","balanceAfter":5000.00}'
+  -d '{"username":"alice","password":"alice123"}'
 ```
 
 Access the UI at: `https://YOUR-APP.onrender.com/transaction-analyzer`
