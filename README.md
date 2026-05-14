@@ -48,7 +48,7 @@ See the [User Guide](USER_GUIDE.md) for screen walkthroughs and demo credentials
 
 ## Live Demo
 
-Deployed on [Render](https://render.com): **https://fintrack-qo3w.onrender.com/transaction-analyzer**
+Deployed on [Render](https://render.com): **https://fintrack-jyqj.onrender.com/transaction-analyzer/**
 
 ---
 
@@ -70,6 +70,12 @@ mvn package cargo:run
 ```
 
 This compiles the source, packages it into `target/transaction-analyzer-1.0-SNAPSHOT.war`, and deploys it to Tomcat in one step. On first run, Cargo downloads Tomcat 9.0.65 (~10 MB) and caches it locally. Subsequent runs use the cache.
+
+To skip tests:
+
+```bash
+mvn package cargo:run -DskipTests
+```
 
 App available at: http://localhost:8080/transaction-analyzer
 
