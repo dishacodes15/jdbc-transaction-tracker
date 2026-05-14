@@ -260,7 +260,7 @@ Exceptions `BusinessException` and `AuthenticationException` map to HTTP
 
 | Util | Role |
 |------|------|
-| `DatabaseConnectionUtil` | JDBC connection factory; one-time schema creation; `resetAllData()` (used by AdminResetServlet) and `dropAllForTest()` (used by tests). |
+| `DatabaseConnectionUtil` | JDBC connection factory; one-time schema creation; `resetAllData()` (used by AdminResetServlet). |
 | `DataSeeder` | Inserts `admin/alice/bob` plus 3 demo accounts and 4 starter transactions when the DB is empty. |
 | `JsonUtil` | Gson wrapper. Excludes `passwordHash` from any user JSON. Helpers `writeJson`, `writeError`, `fromJson`. |
 | `PasswordUtil` | `hash(plain)` and `verify(plain, hash)` via BCrypt. |
@@ -321,31 +321,7 @@ Brand palette: saffron `#F28C28`, navy `#0B3D6E`, gold `#C9A227`, cream `#FFF8EE
 
 ---
 
-## 7. Tests
-
-```mermaid
-graph LR
-    Unit[Unit tests<br/>24 cases] -->|in-memory H2| DAO_Svc[DAOs + Services]
-    Smoke[REST smoke tests<br/>11 cases · @EnabledIfSystemProperty] -->|HttpClient + cookies| Live[Live Tomcat]
-```
-
-| Suite | File | Notes |
-|-------|------|-------|
-| DAO | `UserAccountDAOTest` | CRUD against in-memory H2 (`jdbc:h2:mem:test;MODE=LEGACY`). 7 cases. |
-| Services | `AccountServiceTest`, `AuthServiceTest`, `TransferServiceTest` | Banking invariants, BCrypt, transactional transfers. 17 cases. |
-| REST | `RestApiSmokeTest` | Opt-in. Enabled by `-Drest.url=http://localhost:8080/transaction-analyzer`. Uses Java 11 `HttpClient` + `CookieManager`. 11 cases. |
-
-Run everything:
-
-```bash
-mvn test
-mvn cargo:run &                                                  # in another shell
-mvn -Dtest=RestApiSmokeTest -Drest.url=http://localhost:8080/transaction-analyzer test
-```
-
----
-
-## 8. Operational notes
+## 7. Operational notes
 
 * **DB file** — `~/banking_db.mv.db`. Delete it to wipe state; on restart it
   will be re-created and re-seeded.
@@ -361,7 +337,7 @@ mvn -Dtest=RestApiSmokeTest -Drest.url=http://localhost:8080/transaction-analyze
 
 ---
 
-## 9. Future enhancements (not implemented)
+## 8. Future enhancements (not implemented)
 
 * Statement PDF export (per account, date range).
 * Server-side pagination on `/api/transactions/...`.

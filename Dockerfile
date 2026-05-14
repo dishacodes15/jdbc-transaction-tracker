@@ -12,10 +12,9 @@ WORKDIR /app
 COPY pom.xml .
 RUN mvn -B dependency:go-offline
 
-# Copy sources and build the WAR (tests skipped for faster image builds — they
-# are exercised in CI; see DESIGN.md for the test strategy).
+# Copy sources and build the WAR
 COPY src ./src
-RUN mvn -B -DskipTests clean package
+RUN mvn -B clean package
 
 # ---- Stage 2: Tomcat 9 runtime on JRE 11 ----
 FROM tomcat:9.0.65-jre11-openjdk-slim

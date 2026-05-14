@@ -10,10 +10,6 @@ import java.util.logging.Logger;
 /**
  * JDBC connection factory and schema bootstrap for Pragati Bank.
  *
- * <p>The database URL can be overridden via the system property
- * {@code banking.db.url} (used by tests to point at an in-memory H2 DB).
- * The default is a file-based H2 database at {@code ~/banking_db}.</p>
- *
  * <p>Tables created on first startup:</p>
  * <ul>
  *   <li>{@code users}        — login identities (USER / ADMIN)</li>
@@ -25,11 +21,10 @@ public class DatabaseConnectionUtil {
 
     private static final Logger LOGGER = Logger.getLogger(DatabaseConnectionUtil.class.getName());
 
-    private static final String DB_DRIVER       = "org.h2.Driver";
-    private static final String DEFAULT_DB_URL  = "jdbc:h2:~/banking_db;AUTO_SERVER=TRUE";
-    private static final String DB_URL_PROPERTY = "banking.db.url";
-    private static final String DB_USER         = "sa";
-    private static final String DB_PASSWORD     = "";
+    private static final String DB_DRIVER   = "org.h2.Driver";
+    private static final String DB_URL      = "jdbc:h2:~/banking_db;AUTO_SERVER=TRUE";
+    private static final String DB_USER     = "sa";
+    private static final String DB_PASSWORD = "";
 
     static {
         try {
@@ -42,13 +37,8 @@ public class DatabaseConnectionUtil {
     private DatabaseConnectionUtil() {
     }
 
-    /** Returns the JDBC URL, allowing tests to override via system property. */
-    public static String getJdbcUrl() {
-        return System.getProperty(DB_URL_PROPERTY, DEFAULT_DB_URL);
-    }
-
     public static Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(getJdbcUrl(), DB_USER, DB_PASSWORD);
+        return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
     }
 
     /** Creates all tables if they do not already exist. Idempotent. */
@@ -95,18 +85,6 @@ public class DatabaseConnectionUtil {
             LOGGER.info("Database initialised successfully.");
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error initialising database schema", e);
-        }
-    }
-
-    /** Drops all tables. Used only by tests. */
-    public static void dropAllForTest() {
-        try (Connection conn = getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.execute("DROP TABLE IF EXISTS transactions");
-            stmt.execute("DROP TABLE IF EXISTS accounts");
-            stmt.execute("DROP TABLE IF EXISTS users");
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error dropping tables", e);
         }
     }
 
