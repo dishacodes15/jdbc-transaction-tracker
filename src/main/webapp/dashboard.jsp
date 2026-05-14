@@ -74,6 +74,10 @@
             <h2>Recent Transactions</h2>
             <label>Account</label>
             <select id="txAccount" style="max-width:280px;"></select>
+            <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+                <button id="sortAmtBtn" class="secondary">Sort by Amount ↕</button>
+                <button id="filterLargeBtn" class="secondary">Show &gt; ₹10,000</button>
+            </div>
             <table id="txTable" style="margin-top:14px;">
                 <thead>
                 <tr><th>Date</th><th>Type</th><th>Amount (₹)</th><th>Description</th></tr>
@@ -88,6 +92,9 @@
     <script>
         const ctx = '${pageContext.request.contextPath}';
         let accounts = [];
+        let txRawList = [];
+        let txSortState = 0; // 0=newest first, 1=amount asc, 2=amount desc
+        let txFilterLarge = false;
 
         // --- helpers ---
         const $ = (id) => document.getElementById(id);
@@ -162,25 +169,34 @@
 
         async function loadTransactions(acct) {
             try {
-                const list = await api('GET', '/api/transactions/account/' + encodeURIComponent(acct));
-                const tbody = $('txTable').querySelector('tbody');
-                tbody.innerHTML = '';
-                if (list.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4">No transactions.</td></tr>';
-                    return;
-                }
-                for (const t of list.slice().reverse()) {
-                    const cls = t.transactionType === 'CREDIT' ? 'amt-credit' : 'amt-debit';
-                    const sign = t.transactionType === 'CREDIT' ? '+' : '−';
-                    const tr = document.createElement('tr');
-                    tr.innerHTML =
-                        '<td>' + (t.createdAt || '') + '</td>' +
-                        '<td>' + t.transactionType + '</td>' +
-                        '<td class="' + cls + '">' + sign + ' ₹ ' + fmt(t.amount) + '</td>' +
-                        '<td>' + (t.description || '') + '</td>';
-                    tbody.appendChild(tr);
-                }
+                txRawList = await api('GET', '/api/transactions/account/' + encodeURIComponent(acct));
+                renderTransactions();
             } catch (e) { flash('error', e.message); }
+        }
+
+        function renderTransactions() {
+            const tbody = $('txTable').querySelector('tbody');
+            tbody.innerHTML = '';
+            let list = txRawList.slice();
+            if (txFilterLarge) list = list.filter(t => Number(t.amount) > 10000);
+            if (txSortState === 1) list.sort((a, b) => Number(a.amount) - Number(b.amount));
+            else if (txSortState === 2) list.sort((a, b) => Number(b.amount) - Number(a.amount));
+            else list.reverse();
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4">No transactions.</td></tr>';
+                return;
+            }
+            for (const t of list) {
+                const cls = t.transactionType === 'CREDIT' ? 'amt-credit' : 'amt-debit';
+                const sign = t.transactionType === 'CREDIT' ? '+' : '−';
+                const tr = document.createElement('tr');
+                tr.innerHTML =
+                    '<td>' + (t.createdAt || '') + '</td>' +
+                    '<td>' + t.transactionType + '</td>' +
+                    '<td class="' + cls + '">' + sign + ' ₹ ' + fmt(t.amount) + '</td>' +
+                    '<td>' + (t.description || '') + '</td>';
+                tbody.appendChild(tr);
+            }
         }
 
         async function doOp(kind) {
@@ -223,6 +239,20 @@
         $('logoutBtn').addEventListener('click', async () => {
             try { await api('POST', '/api/auth/logout', {}); } catch (e) {}
             window.location.href = ctx + '/login.jsp';
+        });
+
+        $('sortAmtBtn').addEventListener('click', () => {
+            txSortState = (txSortState + 1) % 3;
+            const labels = ['Sort by Amount ↕', 'Sort by Amount ↑', 'Sort by Amount ↓'];
+            $('sortAmtBtn').textContent = labels[txSortState];
+            renderTransactions();
+        });
+
+        $('filterLargeBtn').addEventListener('click', () => {
+            txFilterLarge = !txFilterLarge;
+            $('filterLargeBtn').textContent = txFilterLarge ? 'Show All' : 'Show > ₹10,000';
+            $('filterLargeBtn').className = txFilterLarge ? '' : 'secondary';
+            renderTransactions();
         });
 
         loadDashboard().catch(e => flash('error', e.message));

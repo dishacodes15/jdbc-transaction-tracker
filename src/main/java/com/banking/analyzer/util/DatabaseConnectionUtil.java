@@ -82,7 +82,8 @@ public class DatabaseConnectionUtil {
             stmt.execute(createUsers);
             stmt.execute(createAccounts);
             stmt.execute(createTransactions);
-            LOGGER.info("Database initialised successfully.");
+            String dbFile = System.getProperty("user.home") + "/banking_db.mv.db";
+            LOGGER.info("Database initialised successfully. File: " + dbFile);
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Error initialising database schema", e);
         }

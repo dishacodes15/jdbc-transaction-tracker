@@ -129,7 +129,7 @@ erDiagram
         VARCHAR password_hash
         VARCHAR full_name
         VARCHAR role         "USER | ADMIN"
-        VARCHAR status       "ACTIVE | LOCKED"
+        VARCHAR status       "ACTIVE"
         TIMESTAMP created_at
     }
     accounts {
@@ -172,7 +172,7 @@ CREATE TABLE users (
     password_hash VARCHAR(100) NOT NULL,
     full_name     VARCHAR(100) NOT NULL,
     role          VARCHAR(20)  NOT NULL,    -- USER | ADMIN
-    status        VARCHAR(20)  NOT NULL,    -- ACTIVE | LOCKED
+    status        VARCHAR(20)  NOT NULL,    -- ACTIVE
     created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -207,7 +207,7 @@ CREATE TABLE transactions (
 
 | Class | Notes |
 |-------|-------|
-| `User` | id, username, passwordHash, fullName, role, status, createdAt. Constants `ROLE_USER`, `ROLE_ADMIN`, `STATUS_ACTIVE`, `STATUS_LOCKED`. |
+| `User` | id, username, passwordHash, fullName, role, status, createdAt. Constants `ROLE_USER`, `ROLE_ADMIN`, `STATUS_ACTIVE`. |
 | `Account` | accountNumber (PK), userId, accountType, status, createdAt. Constants for SAVINGS/CHECKING and ACTIVE/FROZEN. |
 | `Transaction` | id, accountNumber, type, amount (`BigDecimal`), transactionDate, description, balanceAfter. |
 
@@ -221,7 +221,7 @@ Pure JDBC, every query uses `PreparedStatement`, every method handles
 
 | DAO | Key methods |
 |-----|-------------|
-| `UserDAO` | `save`, `findByUsername`, `findById`, `listAll`, `countAll`, `updateStatus` |
+| `UserDAO` | `save`, `findByUsername`, `findById`, `listAll`, `countAll` |
 | `AccountDAO` | `save`, `findByAccountNumber`, `findByUserId`, `listAll`, `countAll`, `isOwnedBy`, `updateBalance` (via DAO), `updateStatus` |
 | `TransactionDAO` | `saveTransaction`, `findById`, `getByAccount`, `countAll`, `sumSystemBalance` |
 
@@ -229,7 +229,7 @@ Pure JDBC, every query uses `PreparedStatement`, every method handles
 
 | Service | Invariants enforced |
 |---------|---------------------|
-| `AuthService` | password verified with BCrypt; rejects LOCKED users. |
+| `AuthService` | password verified with BCrypt. |
 | `AccountService` | deposit/withdraw must target an ACTIVE account; amount > 0; withdraw never reduces balance below 0; balance is computed by summing `transactions.balance_after` of the latest row, or by aggregating credits − debits. Each operation writes a `Transaction` row. |
 | `TransferService` | from-account and to-account must both be ACTIVE; both writes (debit on source, credit on destination) happen inside one JDBC transaction so partial transfers are impossible. |
 
@@ -246,7 +246,7 @@ Exceptions `BusinessException` and `AuthenticationException` map to HTTP
 | `AccountServlet` | `/api/accounts`, `/api/accounts/*` | GET, POST, PUT | List own accounts (or all, for ADMIN); deposit; withdraw; update status (ADMIN). |
 | `TransferServlet` | `/api/transfers` | POST | Body `{fromAccount, toAccount, amount, description}`. |
 | `TransactionServlet` | `/api/transactions/*` | GET | Read-only: per-account history, ownership enforced. |
-| `UserServlet` | `/api/users`, `/api/users/*` | GET, POST, PUT | List, create, lock/unlock users (ADMIN). |
+| `UserServlet` | `/api/users` | GET, POST | List and create users (ADMIN). |
 | `AdminStatsServlet` | `/api/admin/stats` | GET | KPI tiles: user / account / transaction counts and system balance. |
 | `AdminResetServlet` | `/api/admin/reset` | POST | Wipes all data and re-seeds. Invalidates the caller's session. |
 | `ApplicationInitializationListener` | n/a | n/a | `ServletContextListener` — runs `initializeDatabase()` then `seedIfEmpty()` on startup. |
@@ -287,7 +287,6 @@ Exceptions `BusinessException` and `AuthenticationException` map to HTTP
 | GET | `/api/transactions/account/{acct}` | session, owner or ADMIN | Transactions for one account. |
 | GET | `/api/users` | ADMIN | List all users (no password hashes). |
 | POST | `/api/users` | ADMIN | `{username, password, fullName, role, accountNumber?, accountType?}` → 201. |
-| PUT | `/api/users/{id}/status` | ADMIN | `{status: ACTIVE\|LOCKED}` → 200. |
 | GET | `/api/admin/stats` | ADMIN | `{totalUsers, totalAccounts, totalTransactions, systemBalance}`. |
 | POST | `/api/admin/reset` | ADMIN | Wipe + re-seed. Invalidates caller session. |
 
@@ -310,8 +309,8 @@ Three pages share [src/main/webapp/assets/pragati.css](src/main/webapp/assets/pr
 | Page | Audience | Sections |
 |------|----------|----------|
 | [login.jsp](src/main/webapp/login.jsp) | public — `<%@ page session="false" %>` | Branded card, username/password with show/hide toggle, demo-credentials hint. |
-| [dashboard.jsp](src/main/webapp/dashboard.jsp) | USER | My Accounts table · Deposit/Withdraw card · Transfer card · Recent Transactions (per-account selector). |
-| [admin.jsp](src/main/webapp/admin.jsp) | ADMIN | KPI tiles · Create User · Account Status · All Users · All Accounts · **Maintenance** (reset to seed). |
+| [dashboard.jsp](src/main/webapp/dashboard.jsp) | USER | My Accounts table · Deposit/Withdraw card · Transfer card · Recent Transactions (per-account selector, sort by amount, filter &gt; ₹10,000). |
+| [admin.jsp](src/main/webapp/admin.jsp) | ADMIN | KPI tiles · Create User · Account Status · All Users (read-only) · All Accounts · **Maintenance** (reset to seed). |
 
 All client-side calls funnel through a single `api(method, path, body)` helper
 that auto-redirects to `login.jsp` on `401`. There are no client-side

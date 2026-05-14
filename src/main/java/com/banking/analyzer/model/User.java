@@ -14,7 +14,6 @@ public class User {
     public static final String ROLE_ADMIN = "ADMIN";
 
     public static final String STATUS_ACTIVE = "ACTIVE";
-    public static final String STATUS_LOCKED = "LOCKED";
 
     private Long id;
     private String username;
@@ -58,9 +57,5 @@ public class User {
 
     public boolean isAdmin() {
         return ROLE_ADMIN.equals(role);
-    }
-
-    public boolean isActive() {
-        return STATUS_ACTIVE.equals(status);
     }
 }

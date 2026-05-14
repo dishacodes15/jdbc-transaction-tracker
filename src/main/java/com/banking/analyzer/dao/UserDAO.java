@@ -82,19 +82,6 @@ public class UserDAO {
         return null;
     }
 
-    public boolean updateStatus(long id, String status) {
-        String sql = "UPDATE users SET status = ? WHERE id = ?";
-        try (Connection c = DatabaseConnectionUtil.getConnection();
-             PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, status);
-            ps.setLong(2, id);
-            return ps.executeUpdate() > 0;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "updateStatus failed", e);
-        }
-        return false;
-    }
-
     public int countAll() {
         try (Connection c = DatabaseConnectionUtil.getConnection();
              Statement st = c.createStatement();

@@ -19,9 +19,8 @@ import java.util.Map;
  * Admin-only user management.
  *
  * <pre>
- *   GET  /api/users               — list all
- *   POST /api/users               — create user (+ optional initial account)
- *   PUT  /api/users/{id}/status   — lock/unlock
+ *   GET  /api/users   — list all
+ *   POST /api/users   — create user (+ optional initial account)
  * </pre>
  */
 @WebServlet(name = "UserServlet", urlPatterns = {"/api/users", "/api/users/*"})
@@ -81,42 +80,6 @@ public class UserServlet extends HttpServlet {
             response.put("user", u);
             response.put("accountCreated", accountNumber != null);
             JsonUtil.writeJson(resp, HttpServletResponse.SC_CREATED, response);
-        } catch (Exception e) {
-            JsonUtil.writeError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
-        }
-    }
-
-    @Override
-    protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        try {
-            String path = req.getPathInfo();
-            if (path == null) {
-                JsonUtil.writeError(resp, HttpServletResponse.SC_BAD_REQUEST, "Missing path");
-                return;
-            }
-            String[] parts = path.split("/");
-            if (parts.length != 3 || !"status".equals(parts[2])) {
-                JsonUtil.writeError(resp, HttpServletResponse.SC_BAD_REQUEST, "Invalid path");
-                return;
-            }
-            long id;
-            try { id = Long.parseLong(parts[1]); }
-            catch (NumberFormatException e) {
-                JsonUtil.writeError(resp, HttpServletResponse.SC_BAD_REQUEST, "Invalid user id");
-                return;
-            }
-            @SuppressWarnings("unchecked")
-            Map<String, String> body = JsonUtil.fromJson(req, Map.class);
-            String status = body == null ? null : body.get("status");
-            if (!User.STATUS_ACTIVE.equals(status) && !User.STATUS_LOCKED.equals(status)) {
-                JsonUtil.writeError(resp, HttpServletResponse.SC_BAD_REQUEST, "status must be ACTIVE or LOCKED");
-                return;
-            }
-            if (!userDAO.updateStatus(id, status)) {
-                JsonUtil.writeError(resp, HttpServletResponse.SC_NOT_FOUND, "User not found");
-                return;
-            }
-            JsonUtil.writeJson(resp, HttpServletResponse.SC_OK, Map.of("id", id, "status", status));
         } catch (Exception e) {
             JsonUtil.writeError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
         }

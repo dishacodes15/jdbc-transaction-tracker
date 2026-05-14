@@ -17,8 +17,7 @@ Pragati Bank is a tiny, fictitious retail bank. Two kinds of people use it:
   transactions.
 * **Bank staff** (role `ADMIN`) — sign in to a separate console that shows
   bank-wide KPIs and lets them create users, freeze suspicious accounts,
-  lock/unlock users and (for the demo) reset everything back to its seed
-  state.
+  and (for the demo) reset everything back to its seed state.
 
 All money is fictional. Amounts are shown in Indian Rupees (₹) and formatted
 with Indian thousands separators (e.g. ₹ 1,23,500.00).
@@ -41,7 +40,7 @@ with Indian thousands separators (e.g. ₹ 1,23,500.00).
 4. Tap **Show** next to the password if you want to verify what you've typed
    (hidden by default, the same toggle is on every password field in the app).
 5. Click **Sign in**. On success you land on your dashboard; on failure the
-   card shows the reason ("Invalid credentials", "User is locked", …).
+   card shows the reason ("Invalid credentials", …).
 
 If your session times out or you visit a protected page directly, you'll be
 bounced back to login.
@@ -122,8 +121,9 @@ if the amount would push the balance below zero, you get:
 
 * Use the *Account* dropdown in **Recent Transactions** to switch between
   your accounts.
-* Each row shows the date, CREDIT/DEBIT badge, amount, description and the
-  balance *after* that transaction.
+* Each row shows the date, CREDIT/DEBIT badge, amount, and description.
+* Click **Sort by Amount ↕** to cycle through: newest first → amount ascending → amount descending.
+* Click **Show > ₹10,000** to show only transactions above ₹10,000; click **Show All** to clear the filter.
 
 ### Use case 6 — Sign out
 
@@ -156,7 +156,7 @@ redirected here.)
 │ │  [Create User]         │                                  │
 │ └────────────────────────┘                                  │
 │                                                             │
-│ All Users  (id, username, full name, role, status, action)  │
+│ All Users  (id, username, full name, role, status)          │
 │ All Accounts  (account #, owner, type, status)              │
 │                                                             │
 │ Maintenance                                                 │
@@ -192,21 +192,14 @@ They refresh after every action you take on the page.
 > explains this. Either add a starter account in the form above, or create
 > one for them later.
 
-### Use case 9 — Lock / unlock a user
-
-* In **All Users** every row has a **Lock** or **Unlock** button.
-* **Lock** prevents the user from logging in (their next login attempt gets
-  *"User is locked"*).
-* **Unlock** restores `ACTIVE` status so they can sign in again.
-
-### Use case 10 — Freeze / un-freeze an account
+### Use case 9 — Freeze / un-freeze an account
 
 * Use the **Account Status** card on the right.
 * Type the account number, pick `FROZEN` or `ACTIVE`, click **Update Status**.
 * A `FROZEN` account is read-only — deposits, withdrawals and outgoing
   transfers all fail with *"Account is not active"*.
 
-### Use case 11 — Reset the demo to seed data
+### Use case 10 — Reset the demo to seed data
 
 Useful when the demo data has drifted (lots of test transactions, fake
 users, etc.) and you want a clean slate before showing the app.
@@ -232,10 +225,11 @@ users, etc.) and you want a clean slate before showing the app.
 | Deposit / withdraw                    | Dashboard → *Deposit / Withdraw* card                    |
 | Transfer money                        | Dashboard → *Transfer* card                              |
 | See transactions for an account       | Dashboard → *Recent Transactions* (account selector)     |
+| Sort transactions by amount           | Dashboard → *Recent Transactions* → **Sort by Amount ↕** |
+| Show only transactions > ₹10,000      | Dashboard → *Recent Transactions* → **Show > ₹10,000**   |
 | Reveal a password I'm typing          | Click **Show** next to any password field                |
 | Sign out                              | **Logout** button in the top bar                         |
 | Add a new user                        | Admin → *Create User*                                    |
-| Lock or unlock a user                 | Admin → *All Users* → row button                         |
 | Freeze or activate an account         | Admin → *Account Status*                                 |
 | See bank-wide totals                  | Admin → KPI tiles at the top                             |
 | Reset the demo                        | Admin → *Maintenance* → **Reset to seed data**           |
@@ -247,7 +241,6 @@ users, etc.) and you want a clean slate before showing the app.
 | Banner                                       | What it means                                                   | How to fix                          |
 |----------------------------------------------|-----------------------------------------------------------------|-------------------------------------|
 | *Invalid credentials*                         | Wrong username or password.                                     | Try again. Demo creds are on card.  |
-| *User is locked*                              | Admin has set your status to `LOCKED`.                          | Ask an admin to unlock you.         |
 | *Amount must be greater than zero*            | Deposit/withdraw/transfer with 0 or negative amount.            | Enter a positive number.            |
 | *Insufficient balance*                        | Withdraw / outgoing transfer would overdraw the account.        | Reduce the amount.                  |
 | *Account is not active*                       | The source or destination account is `FROZEN`.                  | Ask admin to set it back to ACTIVE. |

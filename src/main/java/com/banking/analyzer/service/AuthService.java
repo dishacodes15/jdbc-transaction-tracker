@@ -11,8 +11,8 @@ import javax.servlet.http.HttpSession;
  * Login / logout brain. Knows nothing about HTTP requests — only the
  * {@link HttpSession}.
  *
- * <p>Throws {@link AuthenticationException} on bad credentials or locked
- * account; callers (servlets) map that to HTTP 401.</p>
+ * <p>Throws {@link AuthenticationException} on bad credentials;
+ * callers (servlets) map that to HTTP 401.</p>
  */
 public class AuthService {
 
@@ -33,9 +33,6 @@ public class AuthService {
         User user = userDAO.findByUsername(username.trim());
         if (user == null || !PasswordUtil.verify(password, user.getPasswordHash())) {
             throw new AuthenticationException("Invalid username or password");
-        }
-        if (!user.isActive()) {
-            throw new AuthenticationException("Account is locked. Contact administrator.");
         }
         SessionUtil.store(session, user);
         return user;

@@ -73,7 +73,7 @@
             <h2>All Users</h2>
             <table id="usersTable">
                 <thead>
-                <tr><th>ID</th><th>Username</th><th>Full name</th><th>Role</th><th>Status</th><th>Actions</th></tr>
+                <tr><th>ID</th><th>Username</th><th>Full name</th><th>Role</th><th>Status</th></tr>
                 </thead>
                 <tbody></tbody>
             </table>
@@ -157,16 +157,9 @@
                     '<td>' + u.username + '</td>' +
                     '<td>' + (u.fullName || '') + '</td>' +
                     '<td>' + u.role + '</td>' +
-                    '<td>' + u.status + '</td>' +
-                    '<td>' + (u.status === 'ACTIVE'
-                        ? '<button class="danger" data-uid="' + u.id + '" data-action="LOCKED">Lock</button>'
-                        : '<button class="secondary" data-uid="' + u.id + '" data-action="ACTIVE">Unlock</button>') +
-                    '</td>';
+                    '<td>' + u.status + '</td>';
                 utb.appendChild(tr);
             }
-            utb.querySelectorAll('button[data-uid]').forEach(b =>
-                b.addEventListener('click', () => updateUserStatus(b.dataset.uid, b.dataset.action))
-            );
 
             const accts = await api('GET', '/api/accounts');
             const atb = $('acctsTable').querySelector('tbody');
@@ -181,14 +174,6 @@
                 atb.appendChild(tr);
             }
             $('acctsEmpty').classList.toggle('hidden', accts.length >= users.length);
-        }
-
-        async function updateUserStatus(uid, status) {
-            try {
-                await api('PUT', '/api/users/' + uid + '/status', { status: status });
-                flash('success', 'User status updated');
-                loadAll();
-            } catch (e) { flash('error', e.message); }
         }
 
         $('createUserBtn').addEventListener('click', async () => {
